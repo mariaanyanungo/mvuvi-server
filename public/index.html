@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RFID Attendance Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">ESP32 RFID</p>
+          <h1>Attendance Dashboard</h1>
+        </div>
+      </header>
+
+      <main class="grid">
+        <section class="panel active-panel">
+          <div class="panel-header">
+            <h2>Active card</h2>
+          </div>
+          <div id="activeCardContent" class="active-card-content">
+            <div class="uid-value" id="activeUid">No active card</div>
+            <div class="tag-row" id="activeTags"></div>
+            <div class="timestamp" id="activeTimestamp">Waiting for a scan</div>
+            <div class="active-message" id="activeMessage" hidden></div>
+            <div id="activeNotice" class="active-notice" hidden>Waiting for checkout button...</div>
+          </div>
+        </section>
+
+        <section class="panel pair-panel">
+          <div class="panel-header">
+            <h2>Pair card</h2>
+          </div>
+
+          <form id="pairForm" class="pair-form">
+            <div class="field field--wide">
+              <label for="cardSelect">Card (unassigned only)</label>
+              <select id="cardSelect" name="cardUid"></select>
+            </div>
+
+            <div class="field">
+              <label for="nameInput">Name</label>
+              <input id="nameInput" name="name" type="text" placeholder="Jane Doe" autocomplete="off" required />
+            </div>
+
+            <div class="field">
+              <label for="phoneInput">Phone Number</label>
+              <input id="phoneInput" name="phone" type="text" placeholder="+1 555 123 4567" autocomplete="off" required />
+            </div>
+
+            <div class="form-footer">
+              <button id="submitButton" type="submit" disabled>Save pairing</button>
+              <p id="pairHint" class="hint">Scan a card first</p>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel table-panel">
+          <div class="panel-header panel-header--split">
+            <h2>Cards</h2>
+            <div class="table-controls">
+              <label for="cardFilter">Filter</label>
+              <select id="cardFilter">
+                <option value="all">All</option>
+                <option value="assigned">Assigned</option>
+                <option value="unassigned">Unassigned</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>UID</th>
+                  <th>Card status</th>
+                  <th>Name</th>
+                  <th>Phone</th>
+                  <th>Status</th>
+                  <th>Last activity</th>
+                </tr>
+              </thead>
+              <tbody id="cardsTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel feed-panel">
+          <div class="panel-header">
+            <h2>Recent activity</h2>
+          </div>
+          <ul id="activityFeed" class="activity-feed"></ul>
+        </section>
+      </main>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>
