@@ -1,9 +1,3 @@
-
-
-
-
-
-
 const { config } = require('../../config');
 const { parseJsonObject } = require('../../utils/normalize');
 const registry = require('../../devices/registry');

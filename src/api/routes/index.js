@@ -13,12 +13,12 @@ const router = express.Router();
 router.use('/api/health', health);
 
 const api = express.Router();
-api.get('/stream', sse.handler);        // Server-Sent Events
+api.get('/stream', sse.handler);       
 api.use('/devices', devices);
 api.use('/trips', trips);
 api.use('/locations', locations);
 api.use('/alerts', alerts);
-api.use('/', legacy);                   // /cards, /events, /active
+api.use('/', legacy);                   
 api.use((req, res) => res.status(404).json({ error: 'Not found' }));
 
 router.use('/api', requireAuth, api);

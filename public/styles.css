@@ -30,13 +30,12 @@ h1 { margin: 0; font-size: 38px; letter-spacing: -0.02em; }
 h2 { margin: 0; font-size: 24px; letter-spacing: -0.01em; }
 
 .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 24px; }
-.active-panel { grid-column: span 4; }
-.pair-panel { grid-column: span 8; }
-
-/* The cards and activity panels are only as tall as their own content.
-   The cards table grows row by row instead of being stretched to match the feed. */
+.active-panel  { grid-column: span 4; }
+.pair-panel    { grid-column: span 8; }
+.register-fisher-panel { grid-column: span 6; }
+.register-card-panel   { grid-column: span 6; }
 .table-panel { grid-column: span 8; align-self: start; }
-.feed-panel { grid-column: span 4; align-self: start; }
+.feed-panel  { grid-column: span 4; align-self: start; }
 
 .panel {
   background: var(--panel);
@@ -115,6 +114,7 @@ input, select {
   color: var(--ink);
 }
 input:focus, select:focus { outline: 2px solid rgba(47, 91, 231, 0.35); border-color: var(--brand); }
+input[readonly] { background: #f8fafc; color: var(--muted); }
 
 .form-footer { grid-column: 1 / -1; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
 button {
@@ -131,6 +131,39 @@ button:disabled { background: var(--brand-disabled); cursor: not-allowed; }
 .hint { margin: 0; color: var(--muted); font-size: 14px; }
 .hint--error { color: var(--error); font-weight: 600; }
 .hint--success { color: var(--success); font-weight: 600; }
+
+/* ---------- Combobox (fisher search) ---------- */
+.combobox { position: relative; }
+.combobox-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15, 27, 61, 0.12);
+  max-height: 240px;
+  overflow-y: auto;
+}
+.combobox-results li {
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  display: grid;
+  gap: 2px;
+}
+.combobox-results li:hover,
+.combobox-results li[aria-selected="true"] {
+  background: var(--soft);
+}
+.combobox-results li .meta { font-size: 12px; color: var(--muted); }
+.combobox-results li.empty { cursor: default; color: var(--muted); font-size: 13px; }
 
 /* ---------- Cards table ---------- */
 .table-controls { display: flex; align-items: center; gap: 10px; }
@@ -166,7 +199,9 @@ td.empty { text-align: center; color: var(--muted); padding: 28px 12px; }
 .activity-empty { color: var(--muted); font-size: 14px; }
 
 @media (max-width: 960px) {
-  .active-panel, .pair-panel, .table-panel, .feed-panel { grid-column: 1 / -1; }
+  .active-panel, .pair-panel,
+  .register-fisher-panel, .register-card-panel,
+  .table-panel, .feed-panel { grid-column: 1 / -1; }
   .pair-form { grid-template-columns: 1fr; }
   h1 { font-size: 30px; }
 }

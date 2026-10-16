@@ -1,9 +1,3 @@
-
-
-
-
-
-
 const { normalizeUid, parseJsonObject, toNumber, parseDate } = require('../../utils/normalize');
 const alertService = require('../../services/alertService');
 

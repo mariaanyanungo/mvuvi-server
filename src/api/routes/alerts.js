@@ -1,9 +1,3 @@
-
-
-
-
-
-
 const express = require('express');
 const alerts = require('../../repositories/alertRepository');
 const wrap = require('../../utils/asyncHandler');

@@ -1,6 +1,3 @@
-
-
-
 require('dotenv').config();
 
 const bool = (value, fallback = false) =>
@@ -23,10 +20,10 @@ const config = {
     password: process.env.MQTT_PASSWORD || undefined,
     baseTopic,
     topics: {
-      rfid: baseTopic,                  // check-in / check-out / scan events (existing topic)
-      location: `${baseTopic}/location`, // GPS positions
-      sos: `${baseTopic}/sos`,           // SOS alerts
-      status: `${baseTopic}/status`      // station heartbeat
+      rfid: baseTopic,                  
+      location: `${baseTopic}/location`, 
+      sos: `${baseTopic}/sos`,           
+      status: `${baseTopic}/status`     
     }
   },
   station: {

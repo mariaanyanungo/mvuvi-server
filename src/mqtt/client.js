@@ -1,16 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
 const mqtt = require('mqtt');
 const { config } = require('../config');
 const router = require('./router');

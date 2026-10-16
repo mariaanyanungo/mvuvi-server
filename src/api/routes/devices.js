@@ -1,11 +1,3 @@
-
-
-
-
-
-
-
-
 const express = require('express');
 const registry = require('../../devices/registry');
 

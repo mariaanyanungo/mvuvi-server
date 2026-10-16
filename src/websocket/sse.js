@@ -1,11 +1,3 @@
-
-
-
-
-
-
-
-
 const { bus, EVENTS } = require('../events/eventBus');
 const activity = require('../services/activityService');
 const registry = require('../devices/registry');

@@ -1,17 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 const { config } = require('../config');
 const { publish, EVENTS } = require('../events/eventBus');
 

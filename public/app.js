@@ -1,32 +1,33 @@
 (() => {
   'use strict';
 
-  // How long the dashboard shows "Waiting for checkout button". Same window as
-  // CHECKOUT_TIMEOUT_MS in the ESP32 sketch.
   const PENDING_MS = 10000;
 
   const NOTE_TEXT = {
     unassigned: 'Card is unassigned',
     'checkout-ignored': 'Checkout ignored: card is unassigned',
     'already-checked-in': 'Already checked in (ignored)',
+    'already-unassigned': 'Card is unassigned',
     'no-active-trip': 'No active trip found',
     'database-error': 'Database error',
     'last-known-location': 'Used last known location',
     'no-location': 'No location available',
-    duplicate: 'Duplicate alert ignored'
+    duplicate: 'Duplicate alert ignored',
+    'scan-only': 'Scan recorded'
   };
 
   const state = {
-    active: null,        // { uid, scannedAt, cardStatus, name }
+    active: null,
     cards: [],
-    events: [],          // newest first
+    events: [],
     filter: 'all',
-    selectedUid: '',
-    userPickedCard: false,
-    pending: null,       // { uid, until }
+    selectedFisher: null,    // { fisherId, name, phone, checkedIn }
+    pending: null,
     lastEventKey: null,
     eventsLoaded: false,
-    flash: null          // { text, kind } message under the Save button
+    flash: null,
+    fisherResults: [],
+    searchToken: 0
   };
 
   const $ = (id) => document.getElementById(id);
@@ -36,18 +37,35 @@
     activeTimestamp: $('activeTimestamp'),
     activeMessage: $('activeMessage'),
     activeNotice: $('activeNotice'),
+
     form: $('pairForm'),
-    cardSelect: $('cardSelect'),
+    fisherSearch: $('fisherSearch'),
+    fisherResults: $('fisherResults'),
+    fisherIdInput: $('fisherIdInput'),
     name: $('nameInput'),
     phone: $('phoneInput'),
+    totalFishers: $('totalFishersInput'),
     submit: $('submitButton'),
     hint: $('pairHint'),
+
+    fisherForm: $('fisherForm'),
+    newFisherName: $('newFisherName'),
+    newFisherPhone: $('newFisherPhone'),
+    fisherSubmit: $('fisherSubmit'),
+    fisherHint: $('fisherHint'),
+
+    registerCardEmpty: $('registerCardEmpty'),
+    registerCardBody: $('registerCardBody'),
+    registerCardUid: $('registerCardUid'),
+    registerCardSubmit: $('registerCardSubmit'),
+    registerCardHint: $('registerCardHint'),
+
     filter: $('cardFilter'),
     cardsBody: $('cardsTableBody'),
     feed: $('activityFeed')
   };
 
-  /* ---------- helpers (text is always set with textContent, so names cannot inject HTML) ---------- */
+  /* ---------- helpers ---------- */
 
   function h(tagName, className, text) {
     const node = document.createElement(tagName);
@@ -64,7 +82,9 @@
     status === 'assigned' ? tag('Assigned', 'assigned') : tag('Unassigned', 'unassigned');
 
   const fisherStatusTag = (status) =>
-    String(status || '').toUpperCase() === 'CHECKED IN' ? tag('Checked in', 'in') : tag('Checked out', 'out');
+    String(status || '').toUpperCase() === 'CHECKED IN'
+      ? tag('Checked in', 'in')
+      : tag('Checked out', 'out');
 
   function eventTag(event) {
     switch (String(event || '').toLowerCase()) {
@@ -96,9 +116,6 @@
     body.replaceChildren(tr);
   }
 
-  // The rule: checked in = assigned, checked out = unassigned.
-  // A server that sends cardStatus is trusted. An older server that does not is
-  // read from the check-in status (never from the name, which checked-out people still have).
   function normalizeCard(card) {
     const checkedIn = String(card.status || '').toUpperCase() === 'CHECKED IN';
     return { ...card, cardStatus: card.cardStatus || (checkedIn ? 'assigned' : 'unassigned') };
@@ -129,13 +146,13 @@
     if (!a || !a.uid) {
       els.activeUid.textContent = 'No active card';
       els.activeTimestamp.textContent = 'Waiting for a scan';
+      renderRegisterCard();
       return;
     }
 
     els.activeUid.textContent = a.uid;
     els.activeTimestamp.textContent = `Scanned ${fmt(a.scannedAt)}`;
 
-    // The cards list is the freshest source for the card's status
     const card = state.cards.find((c) => c.uid === a.uid);
     const cardStatus = card ? card.cardStatus : a.cardStatus;
     const holder = card ? card.name : a.name;
@@ -147,8 +164,156 @@
       els.activeNotice.hidden = !isPending(a.uid);
     } else if (cardStatus === 'unassigned') {
       els.activeTags.append(cardStatusTag('unassigned'));
-      els.activeMessage.textContent = 'Unassigned: enter a name and phone, then press Save pairing.';
+      els.activeMessage.textContent = 'Unassigned: search a fisher, enter total count, then Save Pair.';
       els.activeMessage.hidden = false;
+    }
+
+    renderRegisterCard();
+  }
+
+  /* ---------- Register Card panel ---------- */
+
+  function renderRegisterCard() {
+    const uid = state.active && state.active.uid;
+    if (!uid) {
+      els.registerCardEmpty.hidden = false;
+      els.registerCardBody.hidden = true;
+      els.registerCardUid.value = '';
+      return;
+    }
+    els.registerCardEmpty.hidden = true;
+    els.registerCardBody.hidden = false;
+    els.registerCardUid.value = uid;
+    els.registerCardHint.textContent = 'Card will be added with status "unassigned" if it does not exist yet.';
+    els.registerCardHint.className = 'hint';
+  }
+
+  els.registerCardSubmit.addEventListener('click', async () => {
+    const uid = els.registerCardUid.value.trim();
+    if (!uid) return;
+    els.registerCardSubmit.disabled = true;
+    els.registerCardHint.textContent = 'Registering…';
+    els.registerCardHint.className = 'hint';
+
+    try {
+      const response = await fetch('/api/cards/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid })
+      });
+      const body = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        els.registerCardHint.textContent = body.error || `Server error (${response.status})`;
+        els.registerCardHint.className = 'hint hint--error';
+        return;
+      }
+
+      // body.message is set by the backend: "registered successfully" vs "already registered"
+      els.registerCardHint.textContent = body.message || `Card ${body.uid} ready.`;
+      els.registerCardHint.className = body.wasCreated ? 'hint hint--success' : 'hint';
+      await loadCards();
+    } catch (err) {
+      els.registerCardHint.textContent = 'Cannot reach the server.';
+      els.registerCardHint.className = 'hint hint--error';
+    } finally {
+      els.registerCardSubmit.disabled = false;
+    }
+  });
+
+  /* ---------- Fisher search combobox ---------- */
+
+  function closeResults() {
+    els.fisherResults.hidden = true;
+    els.fisherResults.replaceChildren();
+  }
+
+  function renderResults() {
+    const list = state.fisherResults;
+    if (!list.length) {
+      const li = h('li', 'empty', 'No matching fishers');
+      els.fisherResults.replaceChildren(li);
+      els.fisherResults.hidden = false;
+      return;
+    }
+    els.fisherResults.replaceChildren(
+      ...list.map((f) => {
+        const li = h('li');
+        li.tabIndex = 0;
+        const top = h('div', null, `${f.name}${f.checkedIn ? '  •  checked in' : ''}`);
+        const meta = h('div', 'meta', f.phone + (f.uid ? `  ·  ${f.uid}` : ''));
+        li.append(top, meta);
+        li.addEventListener('mousedown', (event) => {
+          event.preventDefault();
+          selectFisher(f);
+        });
+        return li;
+      })
+    );
+    els.fisherResults.hidden = false;
+  }
+
+  function selectFisher(f) {
+    if (f.checkedIn) {
+      state.flash = { text: `${f.name} is already checked in with another card.`, kind: 'error' };
+      updateSubmitState();
+      closeResults();
+      return;
+    }
+    state.selectedFisher = f;
+    state.flash = null;
+    els.fisherSearch.value = f.name;
+    els.fisherIdInput.value = f.fisherId;
+    els.name.value = f.name;
+    els.phone.value = f.phone || '';
+    closeResults();
+    updateSubmitState();
+  }
+
+  let searchTimer = null;
+  els.fisherSearch.addEventListener('input', () => {
+    state.selectedFisher = null;
+    els.fisherIdInput.value = '';
+    els.name.value = '';
+    els.phone.value = '';
+    state.flash = null;
+    updateSubmitState();
+
+    clearTimeout(searchTimer);
+    const q = els.fisherSearch.value.trim();
+    searchTimer = setTimeout(() => runSearch(q), 180);
+  });
+
+  els.fisherSearch.addEventListener('focus', () => {
+    if (els.fisherSearch.value.trim() !== '' || state.fisherResults.length) {
+      renderResults();
+    }
+  });
+
+  els.fisherSearch.addEventListener('blur', () => {
+    setTimeout(closeResults, 150);
+  });
+
+  async function runSearch(q) {
+    const token = ++state.searchToken;
+    try {
+      const url = q ? `/api/fishers?search=${encodeURIComponent(q)}` : '/api/fishers';
+      const response = await fetch(url);
+      const body = await response.json().catch(() => []);
+      if (token !== state.searchToken) return;
+      if (!response.ok) {
+        console.error('[SEARCH] /api/fishers failed:', response.status, body);
+        state.fisherResults = [];
+        renderResults();
+        return;
+      }
+      state.fisherResults = Array.isArray(body) ? body : [];
+      renderResults();
+    } catch (err) {
+      if (token !== state.searchToken) return;
+      console.error('[SEARCH] network error:', err);
+      state.fisherResults = [];
+      renderResults();
     }
   }
 
@@ -159,23 +324,28 @@
     updateSubmitState();
   }
 
-  function updateSubmitState() {
-    const unassigned = state.cards.filter((c) => c.cardStatus === 'unassigned');
-    const hasName = els.name.value.trim() !== '';
-    const hasPhone = els.phone.value.trim() !== '';
+  function fisherCountValue() {
+    const n = parseInt(els.totalFishers.value, 10);
+    return Number.isFinite(n) && n >= 1 ? n : null;
+  }
 
-    els.submit.disabled = !(state.selectedUid && hasName && hasPhone);
+  function updateSubmitState() {
+    const hasActive = !!(state.active && state.active.uid);
+    const hasFisher = !!state.selectedFisher;
+    const hasCount = fisherCountValue() !== null;
+
+    els.submit.disabled = !(hasActive && hasFisher && hasCount);
 
     let text;
     let kind = '';
     if (state.flash) {
       ({ text, kind } = state.flash);
-    } else if (unassigned.length === 0) {
+    } else if (!hasActive) {
       text = 'Scan a card first';
-    } else if (!state.selectedUid) {
-      text = 'Select an unassigned card';
-    } else if (!hasName || !hasPhone) {
-      text = 'Enter a name and phone number';
+    } else if (!hasFisher) {
+      text = 'Search and select a fisher';
+    } else if (!hasCount) {
+      text = 'Enter the total fisher count';
     } else {
       text = 'Ready to save';
     }
@@ -183,43 +353,13 @@
     els.hint.className = kind ? `hint hint--${kind}` : 'hint';
   }
 
-  function renderCardSelect() {
-    const unassigned = state.cards.filter((c) => c.cardStatus === 'unassigned');
-
-    // The card stops being selectable once it is assigned
-    if (state.userPickedCard && !unassigned.some((c) => c.uid === state.selectedUid)) {
-      state.userPickedCard = false;
-    }
-    // Follow the latest scanned card unless the operator picked another one
-    if (!state.userPickedCard) {
-      const scanned = state.active && unassigned.find((c) => c.uid === state.active.uid);
-      state.selectedUid = scanned ? scanned.uid : '';
-    }
-
-    const options = [];
-    const placeholder = h('option', null, unassigned.length ? 'Select a card' : 'No unassigned cards');
-    placeholder.value = '';
-    options.push(placeholder);
-    unassigned.forEach((card) => {
-      const option = h('option', null, card.uid);
-      option.value = card.uid;
-      options.push(option);
-    });
-    els.cardSelect.replaceChildren(...options);
-    els.cardSelect.value = state.selectedUid;
-    updateSubmitState();
-  }
-
-  els.cardSelect.addEventListener('change', () => {
-    state.selectedUid = els.cardSelect.value;
-    state.userPickedCard = true;
-    setFlash(null);
-  });
-  [els.name, els.phone].forEach((input) => input.addEventListener('input', () => setFlash(null)));
+  els.totalFishers.addEventListener('input', () => setFlash(null));
 
   els.form.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (els.submit.disabled) return;
+    if (!state.active || !state.active.uid) return;
+    if (!state.selectedFisher) return;
     els.submit.disabled = true;
 
     try {
@@ -227,9 +367,9 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          uid: state.selectedUid,
-          name: els.name.value.trim(),
-          phone: els.phone.value.trim()
+          uid: state.active.uid,
+          fisherId: state.selectedFisher.fisherId,
+          totalFishers: fisherCountValue()
         })
       });
       const body = await response.json().catch(() => ({}));
@@ -238,9 +378,14 @@
         setFlash(body.error || 'Could not save the pairing.', 'error');
         return;
       }
+
+      state.selectedFisher = null;
+      els.fisherSearch.value = '';
+      els.fisherIdInput.value = '';
       els.name.value = '';
       els.phone.value = '';
-      state.userPickedCard = false;
+      els.totalFishers.value = '';
+
       setFlash(`${body.name || 'The fisher'} is now checked in with card ${body.uid}.`, 'success');
       await loadCards();
     } catch (err) {
@@ -250,7 +395,45 @@
     }
   });
 
-  /* ---------- Cards table (grows one row per card) ---------- */
+  /* ---------- Register Fisher ---------- */
+
+  els.fisherForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    els.fisherSubmit.disabled = true;
+    els.fisherHint.textContent = 'Registering…';
+    els.fisherHint.className = 'hint';
+
+    try {
+      const response = await fetch('/api/fishers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: els.newFisherName.value.trim(),
+          phone: els.newFisherPhone.value.trim()
+        })
+      });
+      const body = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        // Show the real server message, never a generic "Not found"
+        els.fisherHint.textContent = body.error || `Server error (${response.status})`;
+        els.fisherHint.className = 'hint hint--error';
+        return;
+      }
+      els.fisherHint.textContent = `${body.name} registered. They can now be selected in the search.`;
+      els.fisherHint.className = 'hint hint--success';
+      els.newFisherName.value = '';
+      els.newFisherPhone.value = '';
+      els.newFisherName.focus();
+    } catch (err) {
+      els.fisherHint.textContent = 'Cannot reach the server.';
+      els.fisherHint.className = 'hint hint--error';
+    } finally {
+      els.fisherSubmit.disabled = false;
+    }
+  });
+
+  /* ---------- Cards table ---------- */
 
   function renderCards() {
     const rows = state.cards.filter((c) => state.filter === 'all' || c.cardStatus === state.filter);
@@ -263,8 +446,6 @@
       ...rows.map((card) => {
         const assigned = card.cardStatus === 'assigned';
 
-        // Both tags come from the same value, so they can never disagree:
-        // assigned = checked in, unassigned = checked out
         const status = h('div', 'cell-tags');
         status.appendChild(fisherStatusTag(assigned ? 'CHECKED IN' : 'CHECKED OUT'));
         if (isPending(card.uid)) status.appendChild(tag('Waiting for checkout', 'wait'));
@@ -274,10 +455,10 @@
 
         const tr = h('tr');
         tr.append(
-          cell(card.uid, 'mono'),
-          cell(cardStatusTag(card.cardStatus)),
           cell(name, name === '-' ? 'muted' : ''),
           cell(phone, phone === '-' ? 'muted' : ''),
+          cell(card.uid, 'mono'),
+          cell(cardStatusTag(card.cardStatus)),
           cell(status),
           cell(fmt(card.lastActivity))
         );
@@ -293,31 +474,28 @@
 
   /* ---------- Recent activity ---------- */
 
- function renderFeed() {
-  if (state.events.length === 0) {
-    els.feed.replaceChildren(h('li', 'activity-empty', 'No activity yet'));
-    return;
+  function renderFeed() {
+    if (state.events.length === 0) {
+      els.feed.replaceChildren(h('li', 'activity-empty', 'No activity yet'));
+      return;
+    }
+
+    const recentEvents = state.events.slice(0, 5);
+
+    els.feed.replaceChildren(
+      ...recentEvents.map((entry) => {
+        const li = h('li', 'activity-item');
+        const top = h('div', 'activity-top');
+        top.append(eventTag(entry.event), h('span', 'activity-time', fmt(entry.timestamp)));
+
+        const details = [entry.name, NOTE_TEXT[entry.note]].filter(Boolean).join(' · ');
+        li.append(top, h('div', 'activity-uid', entry.uid || ''));
+        if (details) li.appendChild(h('div', 'activity-meta', details));
+        return li;
+      })
+    );
   }
 
-  // Get only the first 5 items from the array
-  const recentEvents = state.events.slice(0, 5);
-
-  els.feed.replaceChildren(
-    ...recentEvents.map((entry) => {
-      const li = h('li', 'activity-item');
-      const top = h('div', 'activity-top');
-      top.append(eventTag(entry.event), h('span', 'activity-time', fmt(entry.timestamp)));
-
-      const details = [entry.name, NOTE_TEXT[entry.note]].filter(Boolean).join(' · ');
-      li.append(top, h('div', 'activity-uid', entry.uid || ''));
-      if (details) li.appendChild(h('div', 'activity-meta', details));
-      return li;
-    })
-  );
-}
-
-
-  // Looks at the newest event: a scan on an assigned card means "waiting for the checkout button"
   function handleEvents(list) {
     state.events = Array.isArray(list) ? list : [];
     const latest = state.events[0];
@@ -328,15 +506,12 @@
         state.lastEventKey = key;
 
         if (latest.event === 'scan' && latest.cardStatus === 'assigned' && !latest.note) {
-          // A live event counts from now (avoids browser/server clock differences).
-          // The first load counts from the event's own time.
           const startedAt = state.eventsLoaded ? Date.now() : Date.parse(latest.timestamp);
           if (startedAt + PENDING_MS > Date.now()) {
             state.pending = { uid: latest.uid, until: startedAt + PENDING_MS };
             schedulePendingExpiry();
           }
         } else if (state.pending && state.pending.uid === latest.uid) {
-          // A checkout (or any other result) for that card ends the waiting state
           state.pending = null;
         }
       }
@@ -360,31 +535,38 @@
     try {
       state.cards = (await getJson('/api/cards')).map(normalizeCard);
       renderCards();
-      renderCardSelect();
       renderActive();
+      updateSubmitState();
     } catch (err) {
       console.warn('Could not load cards:', err.message);
     }
   }
 
-   function handleActive(active) {
+  // IMPORTANT: never auto-fill the pair form from the active card's holder.
+  // The operator must explicitly search + select a fisher.
+  function clearPairForm() {
+    state.selectedFisher = null;
+    els.fisherSearch.value = '';
+    els.fisherIdInput.value = '';
+    els.name.value = '';
+    els.phone.value = '';
+    els.totalFishers.value = '';
+    state.flash = null;
+    closeResults();
+  }
+
+  function handleActive(active) {
     const before = state.active ? `${state.active.uid}|${state.active.scannedAt}` : null;
     state.active = active && active.uid ? active : null;
     const after = state.active ? `${state.active.uid}|${state.active.scannedAt}` : null;
 
     if (after !== before) {
-      state.userPickedCard = false;  // a new scan takes over the selector
-
-      // A new scan of an unassigned card starts with an empty form for the new person
-      if (state.active && state.active.cardStatus === 'unassigned') {
-        els.name.value = '';
-        els.phone.value = '';
-        state.flash = null;
-        els.name.focus();
-      }
+      // Every new scan fully clears the pair form.
+      clearPairForm();
+      if (state.active) els.fisherSearch.focus();
     }
     renderActive();
-    renderCardSelect();
+    updateSubmitState();
   }
 
   const socket = io();
@@ -392,14 +574,16 @@
   socket.on('cards', (list) => {
     state.cards = (Array.isArray(list) ? list : []).map(normalizeCard);
     renderCards();
-    renderCardSelect();
     renderActive();
+    updateSubmitState();
   });
   socket.on('events', handleEvents);
 
+  // Reset the pair form on first load, in case the server has a stale active card.
+  clearPairForm();
   renderActive();
-  renderCardSelect();
   renderCards();
   renderFeed();
+  updateSubmitState();
   loadCards();
 })();

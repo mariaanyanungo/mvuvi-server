@@ -1,11 +1,3 @@
-
-
-
-
-
-
-
-
 const { config } = require('../config');
 const registry = require('../devices/registry');
 const rfid = require('./handlers/rfidHandler');

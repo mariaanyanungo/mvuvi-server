@@ -1,9 +1,3 @@
-
-
-
-
-
-
 const express = require('express');
 const trips = require('../../repositories/tripRepository');
 const locations = require('../../repositories/locationRepository');

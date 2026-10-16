@@ -1,11 +1,3 @@
-
-
-
-
-
-
-
-
 CREATE TABLE IF NOT EXISTS station_operators (
   operator_id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   first_name    TEXT NOT NULL,
@@ -26,16 +18,6 @@ CREATE TABLE IF NOT EXISTS fishers (
 );
 -- Migration: ALTER TABLE fishers ALTER COLUMN rfid_id DROP NOT NULL;
 
-CREATE TABLE IF NOT EXISTS cards (
-  card_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  rfid_id      TEXT NOT NULL UNIQUE,
-  status       TEXT NOT NULL CHECK (status IN ('assigned', 'unassigned')) DEFAULT 'unassigned',
-  fisher_id    UUID NULL REFERENCES fishers (fisher_id),
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK ((status = 'assigned' AND fisher_id IS NOT NULL) OR (status = 'unassigned' AND fisher_id IS NULL))
-);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_cards_fisher_id ON cards (fisher_id) WHERE fisher_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS trips (
@@ -72,3 +54,10 @@ CREATE TABLE IF NOT EXISTS distressed_fisher_alerts (
   resolved_at                 TIMESTAMPTZ NULL
 );
 CREATE INDEX IF NOT EXISTS ix_alerts_fisher ON distressed_fisher_alerts (fisher_id, triggered_at DESC);
+
+
+CREATE TABLE IF NOT EXISTS cards (
+  card_id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  rfid_id                    TEXT NOT NULL
+  created_at                 TIMESTAMPTZ NULL
+);

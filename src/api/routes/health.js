@@ -1,9 +1,3 @@
-
-
-
-
-
-
 const express = require('express');
 const db = require('../../db/pool');
 const registry = require('../../devices/registry');

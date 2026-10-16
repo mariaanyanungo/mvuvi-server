@@ -1,8 +1,3 @@
-
-
-
-
-
 function normalizeUid(raw) {
   if (typeof raw !== 'string') return null;
   const hex = raw.trim().replace(/^0x/i, '').toUpperCase();

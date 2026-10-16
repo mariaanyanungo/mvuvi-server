@@ -1,12 +1,3 @@
-
-
-
-
-
-
-
-
-
 const { randomUUID } = require('crypto');
 const db = require('../db/pool');
 

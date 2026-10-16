@@ -35,26 +35,85 @@
           </div>
 
           <form id="pairForm" class="pair-form">
-            <div class="field field--wide">
-              <label for="cardSelect">Card (unassigned only)</label>
-              <select id="cardSelect" name="cardUid"></select>
+            <div class="field field--wide combobox">
+              <label for="fisherSearch">Search fisher</label>
+              <input
+                id="fisherSearch"
+                name="fisherSearch"
+                type="text"
+                placeholder="Start typing a name or phone…"
+                autocomplete="off"
+              />
+              <ul id="fisherResults" class="combobox-results" hidden></ul>
+              <input type="hidden" id="fisherIdInput" name="fisherId" />
             </div>
 
             <div class="field">
               <label for="nameInput">Name</label>
-              <input id="nameInput" name="name" type="text" placeholder="Jane Doe" autocomplete="off" required />
+              <input id="nameInput" name="name" type="text" placeholder="Select a fisher above" readonly />
             </div>
 
             <div class="field">
               <label for="phoneInput">Phone Number</label>
-              <input id="phoneInput" name="phone" type="text" placeholder="+1 555 123 4567" autocomplete="off" required />
+              <input id="phoneInput" name="phone" type="text" placeholder="-" readonly />
+            </div>
+
+            <div class="field">
+              <label for="totalFishersInput">Total Fisher count</label>
+              <input
+                id="totalFishersInput"
+                name="totalFishers"
+                type="number"
+                min="1"
+                step="1"
+                inputmode="numeric"
+                placeholder="1"
+                autocomplete="off"
+              />
             </div>
 
             <div class="form-footer">
-              <button id="submitButton" type="submit" disabled>Save pairing</button>
+              <button id="submitButton" type="submit" disabled>Save Pair</button>
               <p id="pairHint" class="hint">Scan a card first</p>
             </div>
           </form>
+        </section>
+
+        <section class="panel register-fisher-panel">
+          <div class="panel-header">
+            <h2>Register fisher</h2>
+          </div>
+          <form id="fisherForm" class="pair-form">
+            <div class="field">
+              <label for="newFisherName">Name</label>
+              <input id="newFisherName" type="text" placeholder="Jane Doe" autocomplete="off" required />
+            </div>
+            <div class="field">
+              <label for="newFisherPhone">Phone Number</label>
+              <input id="newFisherPhone" type="text" placeholder="+1 555 123 4567" autocomplete="off" required />
+            </div>
+            <div class="form-footer">
+              <button id="fisherSubmit" type="submit">Register Fisher</button>
+              <p id="fisherHint" class="hint">Adds the fisher to the search list. Not checked in yet.</p>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel register-card-panel">
+          <div class="panel-header">
+            <h2>Register card</h2>
+          </div>
+          <p class="hint" id="registerCardEmpty">Scan a card to register its UID.</p>
+          <div id="registerCardBody" hidden>
+            <div class="field field--wide">
+              <label for="registerCardUid">Scanned UID</label>
+              <input id="registerCardUid" type="text" readonly />
+            </div>
+            <div class="form-footer">
+              <button id="registerCardSubmit" type="button">Register Card</button>
+              <p id="registerCardHint" class="hint">Card will be added with status "unassigned".</p>
+            </div>
+          </div>
         </section>
 
         <section class="panel table-panel">
@@ -74,10 +133,10 @@
             <table>
               <thead>
                 <tr>
-                  <th>UID</th>
-                  <th>Card status</th>
                   <th>Name</th>
                   <th>Phone</th>
+                  <th>UID</th>
+                  <th>Card status</th>
                   <th>Status</th>
                   <th>Last activity</th>
                 </tr>
